@@ -840,3 +840,15 @@ html[dir="rtl"] .nrs-btn { direction: ltr; }
     stroke-width: 2px;
 }
 
+/* Image size: change this one value to make the body bigger/smaller */
+.body-view { max-width: 460px; }
+.loc-stage { max-width: 460px; }
+.body-stage { min-height: 520px; }
+.body-svg { width: 100%; height: auto; }
+.body-svg image { pointer-events: none; }
+.body-svg .g-tags { display: none; }
+
+.body-svg .region.current   { fill: rgba(14,124,134,.28); stroke: var(--primary-dark); stroke-width: 2.4px; }
+.body-svg .region.has-match { fill: rgba(255,217,122,.55); stroke: #c99a17; stroke-width: 2px; }
+.body-svg.calibrating .region { fill: rgba(14,124,134,.15); stroke: #0e7c86; stroke-width: 1px; }
+
