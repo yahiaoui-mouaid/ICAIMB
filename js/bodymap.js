@@ -265,5 +265,127 @@
 
   function specsFor(view) { return view === 'back' ? BACK_SPECS : FRONT_SPECS; }
 
-  window.BODY_MAP = { build: build, specsFor: specsFor };
+  /* ---------------------------------------------------------------- *
+   * Assessment picker                                                *
+   * ---------------------------------------------------------------- */
+
+  /* Coarse regions the pain assessment collects (step 4). Every hotspot
+     above rolls up into one of these, so the picker can offer the same 18
+     regions the assessment expects while reusing the existing geometry. */
+  var PICK_REGIONS = [
+    { id: 'head',     label: 'Head',     labelAr: 'الرأس' },
+    { id: 'face',     label: 'Face',     labelAr: 'الوجه' },
+    { id: 'neck',     label: 'Neck',     labelAr: 'الرقبة' },
+    { id: 'shoulder', label: 'Shoulder', labelAr: 'الكتف' },
+    { id: 'arm',      label: 'Arm',      labelAr: 'الذراع' },
+    { id: 'elbow',    label: 'Elbow',    labelAr: 'المرفق' },
+    { id: 'forearm',  label: 'Forearm',  labelAr: 'الساعد' },
+    { id: 'hand',     label: 'Hand',     labelAr: 'اليد' },
+    { id: 'chest',    label: 'Chest',    labelAr: 'الصدر' },
+    { id: 'abdomen',  label: 'Abdomen',  labelAr: 'البطن' },
+    { id: 'back',     label: 'Back',     labelAr: 'الظهر' },
+    { id: 'pelvis',   label: 'Pelvis',   labelAr: 'الحوض' },
+    { id: 'hip',      label: 'Hip',      labelAr: 'الورك' },
+    { id: 'thigh',    label: 'Thigh',    labelAr: 'الفخذ' },
+    { id: 'knee',     label: 'Knee',     labelAr: 'الركبة' },
+    { id: 'leg',      label: 'Leg',      labelAr: 'الساق' },
+    { id: 'ankle',    label: 'Ankle',    labelAr: 'الكاحل' },
+    { id: 'foot',     label: 'Foot',     labelAr: 'القدم' }
+  ];
+
+  /* Map every hotspot id (front + back) onto its coarse assessment region. */
+  var PICK_MAP = {
+    /* front */
+    scalp: 'head', face: 'face', jaw: 'face', eye: 'face', ear: 'face', nose: 'face',
+    cheek: 'face', mouth: 'face', neck: 'neck', chest: 'chest', abdomen: 'abdomen',
+    pelvis: 'pelvis', genital: 'pelvis', flank: 'back',
+    shoulder: 'shoulder', upperarm: 'arm', elbow: 'elbow', forearm: 'forearm',
+    wrist: 'hand', hand: 'hand', fingers: 'hand',
+    hip: 'hip', thigh: 'thigh', knee: 'knee', lowerleg: 'leg',
+    ankle: 'ankle', foot: 'foot', toes: 'foot',
+    /* back */
+    'head-back': 'head', 'neck-back': 'neck', 'upper-back': 'back', lumbar: 'back',
+    sacrum: 'back', buttock: 'back'
+  };
+
+  function pickRegionOf(spec) {
+    /* Paired specs are expanded to '<id>-r' / '<id>-l' — strip the side
+     * suffix so both halves map to the same coarse region. */
+    var bare = String(spec.id).replace(/-(r|l)$/, '');
+    return PICK_MAP[bare] || PICK_MAP[spec.id] || null;
+  }
+
+  function pickRegionLabel(id) {
+    for (var i = 0; i < PICK_REGIONS.length; i++) {
+      if (PICK_REGIONS[i].id === id) return PICK_REGIONS[i];
+    }
+    return null;
+  }
+
+  /* Build an SVG figure whose regions are toggleable assessment locations.
+   * `selected` is a map of coarse-region id -> truthy. Hotspots belonging to
+   * a selected coarse region get the .picked class so the highlight is
+   * visible from whichever side the figure is shown. */
+  function buildPicker(view, selected) {
+    var specs = specsFor(view);
+    var svg = build(view);
+    svg.setAttribute('data-picker', 'true');
+
+    specs.forEach(function (s) {
+      var rid = pickRegionOf(s);
+      if (!rid) return;
+      var el = svg.querySelector('[data-region="' + s.id + '"]');
+      if (!el) return;
+      el.setAttribute('data-pick', rid);
+      if (selected && selected[rid]) el.classList.add('picked');
+    });
+
+    return svg;
+  }
+
+  /* Small schematic used to visualise a radiation path (origin -> dest).
+   * Two landmarks with a connecting dashed arrow. Labels are plain text so
+   * the caller passes already-translated strings. */
+  function radiationDiagram(originLabel, destLabel, opts) {
+    opts = opts || {};
+    var svg = makeEl('svg', {
+      viewBox: '0 0 320 120', class: 'rad-svg', role: 'img',
+      'aria-label': String(opts.aria || ('Radiation from ' + originLabel + ' to ' + destLabel))
+    });
+    var g = makeEl('g', {});
+    svg.appendChild(g);
+    g.appendChild(makeEl('rect', { x: 8, y: 8, width: 304, height: 104, rx: 12,
+      fill: '#f6fafb', stroke: '#d9e4ea' }));
+
+    var oX = 74, dX = 246, y = 60;
+    g.appendChild(makeEl('circle', { cx: oX, cy: y, r: 13, fill: '#0e7c86' }));
+    g.appendChild(makeEl('circle', { cx: dX, cy: y, r: 13, fill: '#c98a12' }));
+    g.appendChild(makeEl('path', {
+      d: 'M' + (oX + 15) + ' ' + y + ' L' + (dX - 18) + ' ' + y,
+      fill: 'none', stroke: '#46627a', 'stroke-width': 2.4, 'stroke-dasharray': '6 4'
+    }));
+    g.appendChild(makeEl('path', {
+      d: 'M' + (dX - 18) + ' ' + (y - 7) + ' L' + (dX - 2) + ' ' + y + ' L' + (dX - 18) + ' ' + (y + 7) + ' Z',
+      fill: '#46627a'
+    }));
+
+    var t1 = makeEl('text', { x: oX, y: y + 34, 'text-anchor': 'middle', class: 'rad-lab' });
+    t1.textContent = String(originLabel || '');
+    var t2 = makeEl('text', { x: dX, y: y + 34, 'text-anchor': 'middle', class: 'rad-lab' });
+    t2.textContent = String(destLabel || '');
+    var mid = makeEl('text', { x: 160, y: y - 14, 'text-anchor': 'middle', class: 'rad-sub' });
+    mid.textContent = String(opts.dirLabel || '');
+    g.appendChild(t1); g.appendChild(t2); g.appendChild(mid);
+    return svg;
+  }
+
+  window.BODY_MAP = {
+    build: build,
+    specsFor: specsFor,
+    buildPicker: buildPicker,
+    radiationDiagram: radiationDiagram,
+    pickRegions: PICK_REGIONS,
+    pickRegionLabel: pickRegionLabel,
+    pickRegionOf: pickRegionOf
+  };
 })();

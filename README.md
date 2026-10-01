@@ -1,10 +1,12 @@
 # PAIN SCORE — Doctor Interface
 
 Frontend-only interactive **medical anatomy and pain-classification** reference for
-clinicians. A doctor navigates a human body model, selects an anatomical region and
-structure, then reviews the pain categories, pain types and their characteristics
-(mechanism, duration, sensations, radiation, related structures) — all from static
-data files.
+clinicians, with a structured **clinical pain-assessment wizard**. A doctor navigates
+a human body model, selects an anatomical region and structure, then reviews the pain
+categories, pain types and their characteristics (mechanism, duration, sensations,
+radiation, related structures) — all from static data files. The assessment wizard
+walks the same clinician through 14 steps of structured documentation and produces a
+printable summary.
 
 > **Clinician-driven selection.** This interface does not detect, predict, score,
 > or diagnose pain. There is no AI, no machine learning, no sensor integration and
@@ -54,25 +56,121 @@ Pain detail card                    e.g. Liver-region pain
 
 English is the default. Click **العربية** in the top bar to switch to Arabic — the
 entire interface flips to a right-to-left layout, including the pain taxonomy
-(structure names, pain names, descriptions, radiation and related structures).
-The clinician-driven wording is translated with equal care in both languages, and
-the body figure's left/right tooltips always report the *patient's* side.
+(structure names, pain names, descriptions, radiation and related structures) and the
+full assessment wizard (step titles, every field label, every option, the summary and
+all validation messages). The clinician-driven wording is translated with equal care
+in both languages, and the body figure's left/right tooltips always report the
+*patient's* side.
+
+## Assessment wizard
+
+The mode switch in the top bar selects between **Pain Assessment** (default) and
+**Anatomy & Pain Classification**. The wizard is a physician-facing documentation
+instrument: it collects structured clinical information and produces a clear
+assessment summary. It does **not** autonomously diagnose, prescribe, or claim a
+disease is present.
+
+### The 14 steps
+
+```
+01  Patient information          age · sex · height · weight · pregnancy
+02  Medical history              13 grouped chronic-disease categories + free text
+03  Medications & risk factors   dynamic medication list · smoking · alcohol ·
+                                   substances · visible disability · communication
+04  Pain location                multi-region body map (Left / Right / Bilateral /
+                                   Midline) + free-text location
+05  Pain source                  10 tissue sources
+06  Pain classification          nociceptive (somatic/visceral) · neuropathic ·
+                                   nociplastic · mixed combinations · unclear
+07  Pain characteristics         16 quality descriptors + free text
+08  Intensity & time course      0–10 NRS (now/min/max/avg) · onset · trigger ·
+                                   pattern · evolution
+09  Radiation / factors          origin → destination (+ schematic diagram) ·
+                                   21 aggravating · 11 relieving factors
+10  Associated symptoms          19 symptoms + free text
+11  Functional impact            5 domains on a 5-point scale
+12  Previous pain history        prior episodes · 10 treatments · 5 responses
+13  Clinical alerts              13 findings flagged for physician review
+14  Assessment summary           grouped summary with an Edit action per section
+```
+
+### Behaviour
+
+| Feature | What it does |
+|---|---|
+| **Progress indicator** | The sidebar lists all 14 steps with current / completed / remaining states, a progress bar and an "n of 13 steps complete" label. A step only counts as complete when it validates *and* has something recorded — optional steps left blank never inflate the bar. |
+| **Validation** | Required fields block the Next button and list the problems in an error panel that takes focus. Required fields are marked `*`; conditional fields appear only when their parent answer is given (pregnancy after *female*, disease groups after *yes*, smoking detail after *current smoker*, medication rows after *takes medication*). |
+| **Navigation** | Previous / Next, jump to any step from the sidebar, and an **Edit** action on every summary section that jumps straight back to that step. Data is preserved across navigation because it lives in a state object, not the DOM. |
+| **Drafts** | Every change auto-saves to `localStorage` (with an in-memory fallback). A draft bar offers resume / discard; switching to the anatomy explorer with an unfinished assessment asks for confirmation first. The draft itself is never lost. |
+| **NRS scale** | 0–10 buttons acting as a radio group with full keyboard support (arrow keys, inverted under RTL). Severity bands are conveyed by position, label and caption text — never by colour alone. |
+| **Body-map location** | Front/back toggle; clicking a region adds it with a default laterality taken from the hotspot's patient-side. Each recorded region can be switched to Left / Right / Bilateral / Midline or removed. |
+| **Clinical alerts** | Presented as "Clinical information requiring physician review" — recorded findings, never statements that the patient has a condition. |
+| **Summary** | Grouped into four cards (patient & history, pain profile, impact & history, alerts) with entered data clearly separated from the computed presentation, a disclaimer that the record is not a diagnosis, and a print action that produces a clean printed summary. |
+| **Languages** | The whole wizard switches between English and Arabic. Assessment data survives the switch. |
+
+### State model
+
+The wizard keeps one serializable state object (also what the draft persists):
+
+```js
+{
+  patient:        { age, ageUnit, sex, height, weight, pregnancy, gestAge },
+  medicalHistory: { has, diseases: [], other },
+  medications:    { takes, list: [{ name, ingredient, category, dose,
+                                   frequency, duration, reason, regularity }] },
+  riskFactors:    { smoking, cigsPerDay, yearsSmoking, alcohol, substances,
+                    disability, communication },
+  painLocation:   { regions: { regionId: 'left'|'right'|'bilateral'|'midline' },
+                    manual },
+  painSource:      [],
+  painMechanism:   [],
+  painQuality:     [], qualityOther,
+  timeCourse:      { onsetDate, onsetType, trigger, pattern, evolution },
+  intensity:       { now, min, max, avg },
+  radiation:       { radiates, origin, destination, direction },
+  aggravatingFactors: [], relievingFactors: [],
+  associatedSymptoms: [], associatedOther,
+  functionalImpact:  { mobility, sleep, workStudy, adl, mood },
+  previousHistory:   { similar, treatment: [], response, diagnosis },
+  clinicalAlerts:    [], alertsOther,
+  meta:              { startedAt, updatedAt }
+}
+```
+
+`window.PAIN_WIZARD` exposes `init`, `refresh`, `activate`, `state`, `resetState`,
+`loadDraftRaw`, `saveDraft`, `clearDraft`, `go`, `next`, `prev`, `stepComplete`,
+`doneCount` and `hasData`.
 
 ## Project structure
 
 ```
-index.html               app shell (topbar, three-panel layout, modal)
-css/styles.css           medical UI theme, responsive desktop + tablet, RTL
+index.html               app shell (topbar, mode switch, three-panel explorer,
+                         assessment wizard, confirm modal)
+css/styles.css           medical UI theme, wizard styling, responsive desktop +
+                         tablet, print-friendly summary, RTL
 js/i18n.js               UI string dictionary (en/ar), language state, lookups
-js/bodymap.js            programmatic SVG human figure (front + back views)
-js/app.js                navigation, filters, search, breadcrumbs, rendering
+js/bodymap.js            programmatic SVG human figure (front + back views),
+                         region picker + radiation diagram for the wizard
+js/app.js                mode switching, navigation, filters, search,
+                         breadcrumbs, rendering
+js/wizard.js             14-step assessment wizard (state, validation, drafts,
+                         summary, print)
 js/data/classification.js  reference taxonomy: mechanisms, durations, sensations,
-                          referred-pain patterns, cross-cutting module list
+                           referred-pain patterns, cross-cutting module list
+js/data/assessment-options.js  wizard option sets: history, medications, risk
+                               factors, source, mechanism, treatments, alerts
+js/data/pain-descriptors.js    wizard option sets: quality, laterality, factors,
+                               symptoms, impact scales
 js/data/*.js             16 region/system data modules
-scripts/dom-shim.js      tiny DOM implementation used by the test
+scripts/dom-shim.js      tiny DOM implementation used by the tests
 scripts/validate.js      schema + bodymap hotspot validator (node)
-scripts/test-app.js      end-to-end logic test through the DOM shim (node)
+scripts/test-app.js      end-to-end explorer logic test through the DOM shim
+scripts/test-wizard.js   end-to-end assessment wizard test through the DOM shim
+scripts/test-modes.js    mode-switch + language integration test (DOM shim)
 scripts/audit-coverage.js  verbatim taxonomy leaf coverage audit (node)
+scripts/audit-arabic.js   Arabic translation coverage across all modules
+scripts/audit-structure.js  required English fields + Arabic array parity
+scripts/check-ar.js       rendered-output Arabic smoke test
 scripts/add-module-ar.js   one-shot: inject module-level nameAr/blurbAr (node)
 ```
 
@@ -134,10 +232,13 @@ window.PAIN_DATA_MODULES['abdomen'] = {
 
 ```bash
 node scripts/validate.js          # schema checks + bodymap hotspot resolution
-node scripts/test-app.js          # 76 end-to-end interaction checks (DOM shim)
+node scripts/test-app.js          # 78 end-to-end explorer checks (DOM shim)
+node scripts/test-wizard.js       # 93 end-to-end assessment-wizard checks
+node scripts/test-modes.js        # 15 mode-switch / language integration checks
 node scripts/audit-coverage.js    # verbatim taxonomy leaf coverage per module
 node scripts/audit-arabic.js      # Arabic translation coverage across all modules
 node scripts/audit-structure.js   # required English fields + Arabic array parity
+node scripts/check-ar.js          # rendered Arabic output smoke test
 ```
 
 All are read-only with respect to the app. They need only node itself — no
@@ -149,4 +250,6 @@ npm install, no network.
 face, eye, ENT, neck, chest, back, abdomen, urinary, pelvis & reproductive, upper
 limb, lower limb, musculoskeletal, skin & soft tissue, neuropathic, vascular and
 generalized pain, plus the cross-cutting classification reference. Every structure
-and pain type carries a full Arabic translation alongside the English.
+and pain type carries a full Arabic translation alongside the English, as does the
+entire assessment wizard (14 step titles, ~90 field labels and hints, every option
+in every option set, all validation messages and the summary).

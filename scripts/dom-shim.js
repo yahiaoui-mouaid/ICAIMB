@@ -4,6 +4,12 @@
     area: 1, base: 1, br: 1, col: 1, embed: 1, hr: 1, img: 1,
     input: 1, link: 1, meta: 1, param: 1, source: 1, track: 1, wbr: 1
   };
+  /* SVG graphics elements are written self-closing (<path .../>) or bare; the
+   * shim treats them as void so their siblings stay siblings. */
+  var SVG_VOID = {
+    path: 1, circle: 1, rect: 1, polygon: 1, polyline: 1, line: 1,
+    ellipse: 1, use: 1, stop: 1, image: 1, g: 0
+  };
 
   function ClassList(el) { this.el = el; this.set = new Set(); }
   ClassList.prototype._sync = function () {
@@ -27,7 +33,8 @@
     this.classList = new ClassList(this);
     this.style = {};
     this._text = '';
-    this.value = '';
+    this._value = '';
+    this._hasValue = false;
     this.scrollTop = 0;
   }
   Object.defineProperty(El.prototype, 'hidden', {
@@ -52,6 +59,43 @@
     get: function () { return this._html || ''; },
     set: function (v) { this._html = String(v); this.children = parseFragment(String(v)); this.children.forEach(function (c) { c.parent = this; }, this); }
   });
+  Object.defineProperty(El.prototype, 'outerHTML', {
+    get: function () { return serialize(this); }
+  });
+  Object.defineProperty(El.prototype, 'dataset', {
+    get: function () {
+      var self = this;
+      return new Proxy({}, {
+        get: function (t, k) {
+          if (k === 'bound') return self._bound;
+          return self.attrs['data-' + String(k).replace(/([A-Z])/g, '-$1').toLowerCase()];
+        },
+        set: function (t, k, v) {
+          if (k === 'bound') { self._bound = String(v); return true; }
+          self.attrs['data-' + String(k).replace(/([A-Z])/g, '-$1').toLowerCase()] = String(v);
+          return true;
+        }
+      });
+    }
+  });
+
+  Object.defineProperty(El.prototype, 'value', {
+    get: function () {
+      if (this._hasValue) return this._value;
+      if (this.tag === 'input' || this.tag === 'select' || this.tag === 'textarea') {
+        var v = this.getAttribute('value');
+        if (v !== null) return v;
+      }
+      return '';
+    },
+    set: function (v) { this._value = String(v); this._hasValue = true; }
+  });
+
+  Object.defineProperty(El.prototype, 'checked', {
+    get: function () { return this._checked === true; },
+    set: function (v) { this._checked = !!v; }
+  });
+
   El.prototype.setAttribute = function (k, v) {
     this.attrs[k] = String(v);
     if (k === 'class') { this.classList.set = new Set(String(v).split(/\s+/).filter(Boolean)); }
@@ -111,7 +155,13 @@
     var re = /([^\s=]+)\s*=\s*"([^"]*)"/g;
     var m;
     while ((m = re.exec(str))) attrs[m[1].toLowerCase()] = m[2];
-    str.replace(/([^\s=]+)/g, function (w) { if (!(w.toLowerCase() in attrs)) attrs[w.toLowerCase()] = ''; return w; });
+    /* bare boolean attributes only (no quotes anywhere in the remainder) */
+    var used = Object.keys(attrs);
+    str.replace(/([^\s=]+)(?=\s|$)/g, function (w) {
+      var k = w.toLowerCase();
+      if (!(k in attrs) && used.indexOf(k) < 0 && !/^["']/.test(w)) attrs[k] = '';
+      return w;
+    });
     return attrs;
   }
 
@@ -132,7 +182,7 @@
         var attrs = parseAttrs(tk.tag.slice(name.length));
         Object.keys(attrs).forEach(function (k) { el2.setAttribute(k, attrs[k]); });
         if (cur) cur.appendChild(el2); else out.push(el2);
-        if (!(name in VOID) && !tk.self) { stack.push(cur); cur = el2; }
+        if (!(name in VOID) && !SVG_VOID[name] && !tk.self) { stack.push(cur); cur = el2; }
       } else if (tk.t === 'close') {
         if (cur && cur.tag === tk.tag.toLowerCase()) cur = stack.pop();
       }
@@ -152,8 +202,13 @@
       else if (s[0] === '[') {
         var inner = s.slice(1, -1);
         var eq = inner.indexOf('=');
-        if (eq < 0) simple.attrs.push({ k: inner, v: null });
-        else simple.attrs.push({ k: inner.slice(0, eq), v: inner.slice(eq + 1).replace(/^"|"$/g, '') });
+        if (eq < 0) { simple.attrs.push({ k: inner, v: null, op: null }); }
+        else {
+          var ak = inner.slice(0, eq), av = inner.slice(eq + 1).replace(/^"|"$/g, '');
+          var aop = '=';
+          if (/[~|^$*]$/.test(ak.charAt(ak.length - 1))) { aop = ak.charAt(ak.length - 1); ak = ak.slice(0, -1); }
+          simple.attrs.push({ k: ak, v: av, op: aop });
+        }
       } else simple.tag = s.toLowerCase();
     }
     return simple;
@@ -169,7 +224,14 @@
     for (var j = 0; j < simple.attrs.length; j++) {
       var a = simple.attrs[j];
       if (!(a.k in el.attrs)) return false;
-      if (a.v !== null && el.attrs[a.k] !== a.v) return false;
+      if (a.v === null || a.op === null) continue;
+      var actual = el.attrs[a.k];
+      if (a.op === '=' && actual !== a.v) return false;
+      if (a.op === '^' && actual.indexOf(a.v) !== 0) return false;
+      if (a.op === '$' && actual.slice(-a.v.length) !== a.v) return false;
+      if (a.op === '*' && actual.indexOf(a.v) < 0) return false;
+      if (a.op === '~' && actual.split(/\s+/).indexOf(a.v) < 0) return false;
+      if (a.op === '|' && actual !== a.v && actual.indexOf(a.v + '-') !== 0) return false;
     }
     return true;
   }
@@ -228,11 +290,23 @@
     return doc;
   }
 
+  function serialize(el) {
+    if (el.tag === '#text') return el._text || '';
+    var attrs = Object.keys(el.attrs).map(function (k) {
+      var v = el.attrs[k];
+      return v === '' ? k : k + '="' + v + '"';
+    }).join(' ');
+    var inner = (el.children || []).map(serialize).join('');
+    if (el.tag in VOID || (SVG_VOID[el.tag] && !inner)) return '<' + el.tag + (attrs ? ' ' + attrs : '') + '/>';
+    return '<' + el.tag + (attrs ? ' ' + attrs : '') + '>' + inner + '</' + el.tag + '>';
+  }
+
   var api = {
     El: El,
     Document: Document,
     parseDocument: parseDocument,
-    parseFragment: parseFragment
+    parseFragment: parseFragment,
+    serialize: serialize
   };
   global.__dom = api;
   if (typeof module !== 'undefined') module.exports = api;

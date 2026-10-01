@@ -36,6 +36,10 @@
   </div>
 
   <div class="topbar-actions">
+    <div class="mode-switch" role="tablist" aria-label="Application mode">
+      <button class="mode-btn active" data-mode="assess" role="tab" aria-selected="true" type="button">Pain Assessment</button>
+      <button class="mode-btn" data-mode="explore" role="tab" aria-selected="false" type="button">Taxonomy Explorer</button>
+    </div>
     <button id="langBtn" class="btn btn-ghost" type="button" aria-label="Switch language">العربية</button>
     <button id="refBtn" class="btn btn-ghost" type="button">Classification Reference</button>
     <button id="homeBtn" class="btn btn-ghost" type="button">Reset</button>
@@ -48,7 +52,7 @@
   detect, predict, score, or diagnose pain.
 </div>
 
-<main class="layout">
+<main class="layout" id="explorerView" hidden>
 
   <!-- LEFT: filters -->
   <aside class="panel panel-left" aria-label="Pain filters">
@@ -112,10 +116,63 @@
   </div>
 </div>
 
+<!-- Assessment wizard -->
+<main id="wizardView" class="wizard-view">
+  <aside class="wiz-side" aria-label="Assessment steps">
+    <div class="wiz-side-head">
+      <span class="wiz-brand">PAIN&nbsp;<span class="accent">SCORE</span></span>
+      <span class="wiz-sub">Pain Assessment</span>
+    </div>
+    <div class="wiz-progress-top">
+      <div class="wiz-progress-track"><div id="wizBar" class="wiz-progress-bar" role="progressbar"
+        aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"></div></div>
+      <div id="wizProgressLabel" class="wiz-progress-label"></div>
+    </div>
+    <ol id="wizSteps" class="wiz-steps"></ol>
+    <div class="wiz-side-actions">
+      <button id="wizSaveDraft" class="btn btn-tiny" type="button">Save draft</button>
+      <button id="wizNew" class="btn btn-tiny" type="button">New assessment</button>
+    </div>
+  </aside>
+
+  <section class="wiz-main">
+    <div id="wizDraftBar" class="wiz-draft-bar" hidden></div>
+    <header class="wiz-head">
+      <div>
+        <h2 id="wizTitle"></h2>
+      </div>
+      <span id="wizBadge" class="wiz-badge"></span>
+    </header>
+    <div class="wiz-progress-thin"><div id="wizBarThin" class="wiz-progress-thin-bar"></div></div>
+    <div id="wizErrors" class="wiz-errors" hidden tabindex="-1"></div>
+    <div id="wizBody" class="wiz-body"></div>
+    <footer class="wiz-foot">
+      <button id="wizPrev" class="btn" type="button">← Previous</button>
+      <span id="wizSaveState" class="wiz-save-state" aria-live="polite"></span>
+      <button id="wizNext" class="btn btn-primary" type="button">Next →</button>
+    </footer>
+  </section>
+</main>
+
+<!-- Assessment confirm dialog -->
+<div id="wizConfirm" class="modal" hidden>
+  <div class="modal-backdrop" id="wizConfirmBackdrop"></div>
+  <div class="modal-card" role="alertdialog" aria-modal="true" aria-labelledby="wizConfirmTitle" aria-describedby="wizConfirmBody">
+    <div class="modal-head"><h2 id="wizConfirmTitle"></h2></div>
+    <div class="modal-body" id="wizConfirmBody"></div>
+    <div class="modal-foot">
+      <button class="btn btn-tiny" type="button" id="wizConfirmNo">No</button>
+      <button class="btn btn-primary" type="button" id="wizConfirmYes">Continue</button>
+    </div>
+  </div>
+</div>
+
 <div id="tooltip" class="tooltip" hidden></div>
 
 <script src="js/i18n.js"></script>
 <script src="js/data/classification.js"></script>
+<script src="js/data/assessment-options.js"></script>
+<script src="js/data/pain-descriptors.js"></script>
 <script src="js/data/head-face.js"></script>
 <script src="js/data/eye.js"></script>
 <script src="js/data/ent.js"></script>
@@ -134,5 +191,6 @@
 <script src="js/data/generalized.js"></script>
 <script src="js/bodymap.js"></script>
 <script src="js/app.js"></script>
+<script src="js/wizard.js"></script>
 </body>
 </html>

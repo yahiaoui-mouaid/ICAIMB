@@ -105,6 +105,7 @@
     structureId: null,
     painId: null,
     mode: 'home',          // home | module | structure | pain | filtered
+    appMode: 'assess',     // assess | explore
     query: '',
     filters: { mechanism: {}, duration: {}, characteristic: {} },
     recent: []
@@ -160,6 +161,40 @@
   function $(sel) { return document.querySelector(sel); }
   function $$(sel, root) {
     return Array.prototype.slice.call((root || document).querySelectorAll(sel));
+  }
+
+  /* ------------------------------------------------------------- application mode */
+
+  function setAppMode(mode) {
+    if (mode !== 'assess' && mode !== 'explore') return;
+    if (state.appMode === mode) return;
+    state.appMode = mode;
+
+    var explorer = $('#explorerView');
+    var wizard = $('#wizardView');
+    if (explorer) explorer.hidden = (mode !== 'explore');
+    if (wizard) wizard.hidden = (mode !== 'assess');
+
+    $$('.mode-btn').forEach(function (b) {
+      var on = b.getAttribute('data-mode') === mode;
+      b.classList.toggle('active', on);
+      b.setAttribute('aria-selected', on ? 'true' : 'false');
+    });
+
+    /* The explorer's filters/search stay untouched; just refresh the notice. */
+    applyNotice();
+    if (mode === 'assess' && window.PAIN_WIZARD) window.PAIN_WIZARD.activate();
+    if (mode === 'explore') render();
+  }
+
+  function applyNotice() {
+    var n = $('.notice');
+    if (!n) return;
+    if (state.appMode === 'assess') {
+      n.innerHTML = '<strong>' + T('noticeAssessTitle') + '</strong> ' + T('noticeAssessBody');
+    } else {
+      n.innerHTML = '<strong>' + T('noticeTitle') + '</strong> ' + T('noticeBody');
+    }
   }
 
   /* ------------------------------------------------------------- navigation */
@@ -736,8 +771,10 @@
     setText('#refBtn', T('refBtn'));
     setText('#homeBtn', T('homeBtn'));
     setText('#langBtn', T('langToggle'));
-    setHtml('.notice strong', T('noticeTitle'));
     setHtml('.notice', '<strong>' + T('noticeTitle') + '</strong> ' + T('noticeBody'));
+    applyNotice();
+    setText('.mode-btn[data-mode="assess"]', T('modeAssess'));
+    setText('.mode-btn[data-mode="explore"]', T('modeExplore'));
     setText('.panel-left h2', T('filtersTitle'));
     setText('.panel-left .panel-hint', T('filtersHint'));
     setText('[data-filter="mechanisms"] h3', T('mech'));
@@ -758,6 +795,7 @@
     syncFilterChips();
     buildBody();
     render();
+    if (window.PAIN_WIZARD) window.PAIN_WIZARD.refresh();
   }
 
   function setText(sel, val) {
@@ -773,6 +811,20 @@
     window.I18N.setLang(window.I18N.otherLang());
     applyLang();
   }
+
+  /* Ask before leaving an incomplete assessment for the explorer. The draft
+   * itself is preserved either way — only the view changes. */
+  function askLeaveExplore() {
+    var m = $('#wizConfirm');
+    if (!m) { setAppMode('explore'); return; }
+    $('#wizConfirmTitle').textContent = T('wizConfirmLeaveTitle');
+    $('#wizConfirmBody').textContent = T('wizConfirmLeaveBody');
+    $('#wizConfirmYes').textContent = T('wizYes');
+    $('#wizConfirmNo').textContent = T('wizNo');
+    m.hidden = false;
+    pendingLeave = true;
+  }
+  var pendingLeave = false;
   /* ------------------------------------------------------------- reference modal */
 
   function openReference() {
@@ -885,12 +937,38 @@
     $('#langBtn').addEventListener('click', toggleLang);
     $('#modalClose').addEventListener('click', closeReference);
     $('#modalBackdrop').addEventListener('click', closeReference);
+
+    /* application mode switch */
+    $$('.mode-btn').forEach(function (b) {
+      b.addEventListener('click', function () {
+        var to = b.getAttribute('data-mode');
+        if (to === 'explore') {
+          var busy = window.PAIN_WIZARD && window.PAIN_WIZARD.hasData();
+          if (busy) {
+            askLeaveExplore();
+            return;
+          }
+        }
+        setAppMode(to);
+      });
+    });
     document.addEventListener('keydown', function (ev) {
       if (ev.key === 'Escape') {
         if (!$('#modal').hidden) closeReference();
         else if (!$('#searchResults').hidden) hideSearchResults();
       }
     });
+
+    /* assessment confirm dialog (shared with the wizard) */
+    var wc = $('#wizConfirm');
+    if (wc) {
+      $('#wizConfirmNo').addEventListener('click', function () { wc.hidden = true; pendingLeave = false; });
+      $('#wizConfirmBackdrop').addEventListener('click', function () { wc.hidden = true; pendingLeave = false; });
+      $('#wizConfirmYes').addEventListener('click', function () {
+        wc.hidden = true;
+        if (pendingLeave) { pendingLeave = false; setAppMode('explore'); }
+      });
+    }
   }
 
   /* ------------------------------------------------------------- init */
@@ -905,11 +983,13 @@
       console.warn('PAIN SCORE: missing data modules: ' + missing.join(', '));
     }
     applyStaticLabels();
+    applyNotice();
     buildBody();
     buildFilters();
     buildQuickAccess();
     bindEvents();
     render();
+    if (window.PAIN_WIZARD) window.PAIN_WIZARD.init();
   }
 
   /* First-pass label application (English defaults already live in the markup). */
@@ -926,6 +1006,9 @@
     setText('#homeBtn', T('homeBtn'));
     setText('#langBtn', T('langToggle'));
     setHtml('.notice', '<strong>' + T('noticeTitle') + '</strong> ' + T('noticeBody'));
+    applyNotice();
+    setText('.mode-btn[data-mode="assess"]', T('modeAssess'));
+    setText('.mode-btn[data-mode="explore"]', T('modeExplore'));
     setText('.panel-left h2', T('filtersTitle'));
     setText('.panel-left .panel-hint', T('filtersHint'));
     setText('[data-filter="mechanisms"] h3', T('mech'));

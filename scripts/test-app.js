@@ -174,6 +174,11 @@ check('RTL applied', doc.documentElement.getAttribute('dir') === 'rtl');
 check('lang is ar', doc.documentElement.getAttribute('lang') === 'ar');
 check('title translated', doc.title.indexOf('واجهة الطبيب') >= 0);
 check('toggle flips to English', $('#langBtn').textContent === 'English');
+check('wizard notice translated (assess mode)', text($('.notice')).indexOf('تقييم يُوثِّقه الطبيب') >= 0);
+/* switch to the explorer for its static labels */
+var exploreBtn = $$('.mode-btn').filter(function (b) { return b.getAttribute('data-mode') === 'explore'; })[0];
+click(exploreBtn);
+check('explorer visible', $('#explorerView').hidden === false && $('#wizardView').hidden === true);
 check('notice translated', text($('.notice')).indexOf('التحديد من قِبل الطبيب') >= 0);
 check('filters title translated', text($('.panel-left h2')) === 'فلاتر الألم');
 check('front/back buttons translated',
