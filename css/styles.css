@@ -820,3 +820,23 @@ html[dir="rtl"] .nrs-btn { direction: ltr; }
   .dl-row { font-size: 11.5px; }
 }
 
+/* Hide the stylized drawing */
+.body-svg .g-decor {
+    display: none; 
+}
+
+/* Make clickable regions invisible by default */
+.body-svg .region {
+    fill: transparent;
+    stroke: transparent;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+/* Add a realistic highlight when the user hovers over a body part */
+.body-svg .region:hover {
+    fill: rgba(220, 53, 69, 0.4); /* Semi-transparent red pain indicator */
+    stroke: #dc3545;
+    stroke-width: 2px;
+}
+

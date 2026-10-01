@@ -226,6 +226,8 @@
     return el;
   }
 
+
+
   function build(view) {
     var specs = view === 'back' ? BACK_SPECS : FRONT_SPECS;
     var decor = view === 'back' ? BACK_DECOR : FRONT_DECOR;
@@ -239,8 +241,18 @@
     var gBody = makeEl('g', { class: 'g-body' });
     svg.appendChild(gBody);
 
-    /* Silhouette glow behind the figure */
-    gBody.appendChild(makeEl('ellipse', { cx: 180, cy: 445, rx: 122, ry: 428, class: 'silhouette' }));
+    /* --- REMOVE THE OLD SILHOUETTE --- */
+    // gBody.appendChild(makeEl('ellipse', { cx: 180, cy: 445, rx: 122, ry: 428, class: 'silhouette' }));
+
+    /* --- ADD THIS: Insert high-res anatomical images --- */
+    var imagePath = view === 'back' ? 'images/anatomy-back.png' : 'images/anatomy-front.png';
+    gBody.appendChild(makeEl('image', { 
+        href: imagePath, 
+        width: 360, 
+        height: 900, 
+        x: 0, 
+        y: 0 
+    }));
 
     specs.forEach(function (s) { gBody.appendChild(regionEl(s)); });
 
@@ -262,6 +274,8 @@
 
     return svg;
   }
+
+
 
   function specsFor(view) { return view === 'back' ? BACK_SPECS : FRONT_SPECS; }
 
